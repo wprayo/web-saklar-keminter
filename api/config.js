@@ -20,6 +20,13 @@ module.exports = (req, res) => {
     port: Number(process.env.MQTT_PORT || 8084),
     path: process.env.MQTT_PATH || '/mqtt',
     user: process.env.MQTT_USER || '',
-    pass: process.env.MQTT_PASS || ''
+    pass: process.env.MQTT_PASS || '',
+
+    // Supabase anon key memang didesain untuk dipakai di browser (public),
+    // keamanan datanya dijaga oleh Row Level Security, bukan dengan
+    // menyembunyikan key ini. Tetap disalurkan lewat endpoint ini supaya
+    // pengguna cukup isi Environment Variables tanpa mengedit index.html.
+    supabaseUrl: process.env.SUPABASE_URL || '',
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
   });
 };

@@ -91,6 +91,60 @@ mixed content, dan aplikasi menampilkan peringatan kalau itu terjadi. Sertifikat
 harus valid (Let's Encrypt) — self-signed ditolak browser, beda dengan `onBadCertificate => true`
 di Flutter.
 
+## Login & database (Supabase)
+
+Sejak versi ini, device tidak lagi disimpan di localStorage browser — tersimpan di database
+Supabase per akun, jadi bisa diakses dari HP dan laptop dengan login yang sama, dan tiap
+orang yang daftar cuma melihat device miliknya sendiri.
+
+**1. Buat project Supabase**
+
+Daftar gratis di [supabase.com](https://supabase.com), buat project baru, tunggu sampai
+statusnya aktif (sekitar 2 menit). Catat kuat-kuat database password yang diminta saat
+membuat project (jarang dipakai langsung, tapi simpan saja).
+
+**2. Jalankan skema tabel**
+
+Buka **SQL Editor** di dashboard project, klik **New query**, tempel seluruh isi
+`sql/schema.sql` dari folder ini, lalu klik **Run**. Ini membuat tabel `devices` lengkap
+dengan Row Level Security supaya tiap user cuma bisa lihat & ubah devicenya sendiri.
+
+**3. Matikan konfirmasi email**
+
+Aplikasi ini pakai username, bukan email asli (di baliknya disamarkan jadi
+`<username>@users.keminter.app` supaya bisa numpang sistem Auth Supabase). Karena email itu
+tidak nyata, wajib matikan verifikasinya dulu:
+
+Buka **Authentication → Sign In / Providers → Email**, matikan toggle **Confirm email**.
+Tanpa langkah ini, akun baru tidak akan pernah bisa login karena menunggu email konfirmasi
+yang tidak mungkin terkirim.
+
+**4. Salin URL dan anon key**
+
+Buka **Project Settings → API**. Salin nilai **Project URL** dan **anon public key**.
+
+**5. Isi environment variable di Vercel**
+
+Tambahkan dua ini di Settings → Environment Variables (selain enam variabel MQTT yang sudah
+ada sebelumnya):
+
+| Nama | Isi dengan |
+|---|---|
+| `SUPABASE_URL` | Project URL dari langkah 4 |
+| `SUPABASE_ANON_KEY` | anon public key dari langkah 4 |
+
+Redeploy setelah menyimpan. Anon key ini memang didesain aman untuk dipakai di browser —
+bukan kredensial rahasia seperti password MQTT, keamanan datanya dijamin oleh Row Level
+Security di langkah 2, bukan oleh menyembunyikan key ini.
+
+**6. Coba daftar**
+
+Buka situsnya, klik **Daftar**, isi username (huruf kecil/angka/titik/underscore, 3-20
+karakter) dan password (minimal 6 karakter). Setelah daftar langsung masuk otomatis dan bisa
+mulai menambah device. Siapa pun yang tahu alamat situsnya bisa mendaftar sendiri — kalau
+mau membatasi siapa saja yang boleh pakai, itu perlu ditambahkan terpisah (bisa dibantu kalau
+diperlukan nanti).
+
 ## Sisi ESP tidak berubah
 
 Topik dan payload sama persis dengan aplikasi Flutter:
@@ -101,7 +155,8 @@ Topik dan payload sama persis dengan aplikasi Flutter:
 
 ## Fitur
 
-- Tambah, ubah, hapus perangkat; tersimpan di localStorage browser
+- Login & daftar dengan username + password, tiap akun cuma melihat devicenya sendiri
+- Tambah, ubah, hapus perangkat; tersimpan di database Supabase, tersinkron di semua perangkat/browser
 - 1–4 saklar per perangkat dengan nama bebas
 - Broker bawaan atau broker sendiri (WS/WSS, port, path, login opsional)
 - Lampu status: merah = broker putus, abu = broker nyambung tapi ESP diam, hijau = ESP menjawab

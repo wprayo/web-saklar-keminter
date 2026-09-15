@@ -197,9 +197,64 @@
   @media (prefers-reduced-motion:reduce){
     *{transition:none !important;animation:none !important}
   }
+
+  /* ---------- Auth screen ---------- */
+  .auth-wrap{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:24px;
+  }
+  .auth-card{
+    width:100%;max-width:380px;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:28px 24px;
+  }
+  .auth-head{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:22px}
+  .auth-head .bolt{margin-bottom:12px}
+  .auth-head h1{font-size:19px;font-weight:700;margin:0;letter-spacing:-.01em}
+  .auth-sub{font-size:13.5px;color:var(--ink-dim);margin:6px 0 0;text-align:center}
+  .auth-switch{text-align:center;font-size:13.5px;color:var(--ink-dim);margin:14px 0 0}
+  .linklike{
+    background:none;border:none;color:var(--brass);font:inherit;font-size:inherit;
+    padding:0;margin-left:4px;cursor:pointer;text-decoration:underline;
+  }
+  .linklike:hover{color:#E6B252}
+  .userchip{font-size:13px;color:var(--ink-dim);margin-right:2px;white-space:nowrap}
+
+  @media (max-width:400px){
+    .auth-card{padding:24px 18px}
+  }
 </style>
 </head>
 <body>
+
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-head">
+      <div class="bolt" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>
+      </div>
+      <h1>Panel Saklar Keminter</h1>
+      <p class="auth-sub" id="authSub">Masuk untuk mengelola perangkatmu.</p>
+    </div>
+
+    <div class="field">
+      <label for="au-user">Username</label>
+      <input id="au-user" class="mono" autocomplete="username" placeholder="mis. budi123" />
+    </div>
+    <div class="field">
+      <label for="au-pass">Password</label>
+      <input id="au-pass" type="password" autocomplete="current-password" placeholder="minimal 6 karakter" />
+    </div>
+    <p class="hint" id="authErr" hidden></p>
+    <button class="primary" id="authSubmit">Masuk</button>
+    <p class="auth-switch">
+      <span id="authSwitchText">Belum punya akun?</span>
+      <button type="button" class="linklike" id="authSwitchBtn">Daftar</button>
+    </p>
+  </div>
+</div>
+
+<div id="appScreen" hidden>
 
 <header>
   <div class="wrap plate">
@@ -211,11 +266,14 @@
       <p id="summary">Memuat perangkat…</p>
     </div>
     <div class="spacer"></div>
+    <span class="userchip mono" id="userChip"></span>
     <button class="ghost" id="reconnectAll">Sambung ulang</button>
+    <button class="ghost" id="logoutBtn">Keluar</button>
   </div>
 </header>
 
 <main class="wrap">
+  <div id="dbErr" class="notice" hidden></div>
   <div id="mixedWarn" class="notice" hidden>
     <b>Sambungan ws:// diblokir browser.</b> Halaman ini dibuka lewat HTTPS, jadi broker harus memakai <span class="mono">wss://</span>. Ubah protokol perangkat ke WSS, atau buka aplikasi ini dari alamat http lokal.
   </div>
@@ -324,7 +382,10 @@
   </form>
 </dialog>
 
+</div>
+
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* =========================================================
    BROKER BAWAAN
@@ -344,6 +405,11 @@ let DEFAULT_BROKER = {
 };
 const ACK_TIMEOUT = 3500;
 
+let SUPABASE_URL = '';
+let SUPABASE_ANON_KEY = '';
+let sb = null;          // client Supabase, dibuat setelah config termuat
+let currentUser = null; // {id, username}
+
 async function loadBrokerConfig(){
   try {
     const res = await fetch('/api/config', {cache:'no-store'});
@@ -359,29 +425,95 @@ async function loadBrokerConfig(){
         pass: cfg.pass || ''
       };
     }
+    if(cfg && cfg.supabaseUrl && cfg.supabaseAnonKey){
+      SUPABASE_URL = cfg.supabaseUrl;
+      SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
   } catch(e){ /* tetap pakai nilai cadangan di atas */ }
 }
 /* ========================================================= */
-
-const STORE_KEY = 'keminter.devices.v1';
-const memFallback = {};
-const store = {
-  get(k){ try { return localStorage.getItem(k); } catch(e){ return memFallback[k] ?? null; } },
-  set(k,v){ try { localStorage.setItem(k,v); } catch(e){ memFallback[k]=v; } }
-};
 
 let devices = [];
 const conns = new Map();      // id -> {client, connected, connecting, esp, error, ackTimer}
 const collapsed = new Set();  // id perangkat yang ditutup
 
-/* ---------------- data ---------------- */
-function loadDevices(){
-  const raw = store.get(STORE_KEY);
-  if(!raw) return [];
-  try { const d = JSON.parse(raw); return Array.isArray(d) ? d : []; }
-  catch(e){ return []; }
+/* ---------------- akun & database ---------------- */
+function sanitizeUsername(u){ return String(u || '').trim().toLowerCase(); }
+function validUsername(u){ return /^[a-z0-9_.]{3,20}$/.test(u); }
+function usernameToEmail(u){ return u + '@users.keminter.app'; }
+
+function rowToDevice(row){
+  return {
+    id: row.id,
+    name: row.name,
+    deviceCode: row.device_code,
+    secretToken: row.secret_token,
+    useDefault: row.use_default,
+    host: row.host || '',
+    protocol: row.protocol || 'wss',
+    port: row.port || 8084,
+    path: row.path || '/mqtt',
+    useAuth: row.use_auth,
+    user: row.broker_user || '',
+    pass: row.broker_pass || '',
+    activeSwitches: row.active_switches,
+    switchNames: Array.isArray(row.switch_names) && row.switch_names.length
+      ? row.switch_names : ['Saklar 1','Saklar 2','Saklar 3','Saklar 4'],
+    switchStates: row.switch_states || {s1:false, s2:false, s3:false, s4:false}
+  };
 }
-function saveDevices(){ store.set(STORE_KEY, JSON.stringify(devices)); }
+function deviceToRow(dev){
+  return {
+    name: dev.name,
+    device_code: dev.deviceCode,
+    secret_token: dev.secretToken,
+    use_default: dev.useDefault,
+    host: dev.host || '',
+    protocol: dev.protocol || 'wss',
+    port: dev.port || 8084,
+    path: dev.path || '/mqtt',
+    use_auth: dev.useAuth,
+    broker_user: dev.user || '',
+    broker_pass: dev.pass || '',
+    active_switches: dev.activeSwitches,
+    switch_names: dev.switchNames,
+    switch_states: dev.switchStates
+  };
+}
+
+function showDbError(msg){ const e = $('#dbErr'); e.innerHTML = '<b>Gagal memuat data.</b> ' + esc(msg); e.hidden = false; }
+function hideDbError(){ $('#dbErr').hidden = true; }
+
+async function refreshDevicesFromDB(){
+  devices.forEach(d => disconnectDevice(d.id));
+  const { data, error } = await sb.from('devices').select('*').order('created_at', { ascending: true });
+  if(error){ devices = []; render(); showDbError(error.message); return; }
+  hideDbError();
+  devices = (data || []).map(rowToDevice);
+  render();
+  devices.forEach(connectDevice);
+}
+
+async function insertDeviceDB(payload){
+  const { data, error } = await sb.from('devices').insert(deviceToRow(payload)).select().single();
+  if(error) throw error;
+  return rowToDevice(data);
+}
+async function updateDeviceDB(id, payload){
+  const { data, error } = await sb.from('devices').update(deviceToRow(payload)).eq('id', id).select().single();
+  if(error) throw error;
+  return rowToDevice(data);
+}
+async function updateSwitchStatesDB(id, switchStates){
+  const { error } = await sb.from('devices').update({ switch_states: switchStates }).eq('id', id);
+  if(error) console.error('Gagal menyimpan status saklar:', error.message);
+}
+async function deleteDeviceDB(id){
+  const { error } = await sb.from('devices').delete().eq('id', id);
+  if(error) throw error;
+}
+
 function getDevice(id){ return devices.find(d => d.id === id) || null; }
 
 function brokerOf(dev){
@@ -499,7 +631,7 @@ function applyStatus(dev, text){
   ['s1','s2','s3','s4'].forEach(k => {
     if(typeof data[k] === 'boolean') dev.switchStates[k] = data[k];
   });
-  saveDevices();
+  updateSwitchStatesDB(dev.id, dev.switchStates);
   paintCard(dev.id); paintSummary();
 }
 
@@ -521,7 +653,7 @@ function toggleSwitch(id, index, value){
     token: dev.secretToken
   }), {qos:0});
   dev.switchStates[key] = value;
-  saveDevices();
+  updateSwitchStatesDB(id, dev.switchStates);
   paintCard(id);
 }
 
@@ -728,18 +860,26 @@ function closeDialog(){ dlg.close(); editingId = null; }
 $('#dlgCancel').addEventListener('click', closeDialog);
 dlg.addEventListener('cancel', ev => { ev.preventDefault(); closeDialog(); });
 
-$('#dlgDelete').addEventListener('click', () => {
+$('#dlgDelete').addEventListener('click', async () => {
   if(!editingId) return;
   const dev = getDevice(editingId);
   if(!dev || !confirm('Hapus "' + dev.name + '"?')) return;
+  $('#dlgDelete').disabled = true;
+  try {
+    await deleteDeviceDB(editingId);
+  } catch(err){
+    $('#dlgDelete').disabled = false;
+    alert('Gagal menghapus: ' + err.message);
+    return;
+  }
+  $('#dlgDelete').disabled = false;
   disconnectDevice(editingId);
   devices = devices.filter(d => d.id !== editingId);
-  saveDevices();
   closeDialog();
   render();
 });
 
-$('#dlgSave').addEventListener('click', () => {
+$('#dlgSave').addEventListener('click', async () => {
   const err = m => { const e = $('#formErr'); e.textContent = m; e.hidden = false; };
   const name = $('#f-name').value.trim();
   const code = $('#f-code').value.trim();
@@ -761,8 +901,8 @@ $('#dlgSave').addEventListener('click', () => {
   while(names.length < 4) names.push('Saklar ' + (names.length + 1));
 
   const old = editingId ? getDevice(editingId) : null;
-  const dev = {
-    id: old ? old.id : Date.now().toString(36),
+  const payload = {
+    id: old ? old.id : null,
     name, deviceCode: code, secretToken: token,
     useDefault: useDef,
     host: useDef ? '' : host,
@@ -778,18 +918,27 @@ $('#dlgSave').addEventListener('click', () => {
   };
 
   const changed = !old ||
-    old.useDefault !== dev.useDefault || old.host !== dev.host || old.port !== dev.port ||
-    old.protocol !== dev.protocol || old.path !== dev.path || old.useAuth !== dev.useAuth ||
-    old.user !== dev.user || old.pass !== dev.pass ||
-    old.deviceCode !== dev.deviceCode || old.secretToken !== dev.secretToken;
+    old.useDefault !== payload.useDefault || old.host !== payload.host || old.port !== payload.port ||
+    old.protocol !== payload.protocol || old.path !== payload.path || old.useAuth !== payload.useAuth ||
+    old.user !== payload.user || old.pass !== payload.pass ||
+    old.deviceCode !== payload.deviceCode || old.secretToken !== payload.secretToken;
 
-  if(old) devices = devices.map(d => d.id === dev.id ? dev : d);
-  else devices.push(dev);
+  $('#dlgSave').disabled = true;
+  let saved;
+  try {
+    saved = old ? await updateDeviceDB(old.id, payload) : await insertDeviceDB(payload);
+  } catch(e){
+    $('#dlgSave').disabled = false;
+    return err('Gagal menyimpan: ' + e.message);
+  }
+  $('#dlgSave').disabled = false;
 
-  saveDevices();
+  if(old) devices = devices.map(d => d.id === saved.id ? saved : d);
+  else devices.push(saved);
+
   closeDialog();
   render();
-  if(changed){ disconnectDevice(dev.id); connectDevice(dev); }
+  if(changed){ disconnectDevice(saved.id); connectDevice(saved); }
 });
 
 /* ---------------- boot ---------------- */
@@ -799,12 +948,110 @@ $('#reconnectAll').addEventListener('click', () => {
   devices.forEach(d => { disconnectDevice(d.id); connectDevice(d); });
 });
 
+/* ---------------- auth screen ---------------- */
+let authMode = 'login';
+
+function showAuthErr(msg){ const e = $('#authErr'); e.textContent = msg; e.hidden = false; }
+function clearAuthErr(){ $('#authErr').hidden = true; }
+
+function translateAuthError(err){
+  const m = (err && err.message) ? err.message : String(err);
+  if(/already registered|already exists|already been registered/i.test(m)) return 'Username sudah dipakai, coba username lain.';
+  if(/invalid login credentials/i.test(m)) return 'Username atau password salah.';
+  if(/Password should be at least/i.test(m)) return 'Password terlalu pendek.';
+  if(/Failed to fetch|NetworkError/i.test(m)) return 'Tidak bisa menghubungi database. Cek koneksi internet.';
+  return m;
+}
+
+$('#authSwitchBtn').addEventListener('click', () => {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  $('#authSubmit').textContent = authMode === 'login' ? 'Masuk' : 'Daftar';
+  $('#authSub').textContent = authMode === 'login' ? 'Masuk untuk mengelola perangkatmu.' : 'Buat akun baru, gratis.';
+  $('#authSwitchText').textContent = authMode === 'login' ? 'Belum punya akun?' : 'Sudah punya akun?';
+  $('#authSwitchBtn').textContent = authMode === 'login' ? 'Daftar' : 'Masuk';
+  clearAuthErr();
+});
+
+async function handleAuthSubmit(){
+  clearAuthErr();
+  if(!sb){ showAuthErr('Database belum dikonfigurasi. Set SUPABASE_URL & SUPABASE_ANON_KEY di Vercel.'); return; }
+
+  const uname = sanitizeUsername($('#au-user').value);
+  const pass = $('#au-pass').value;
+  if(!validUsername(uname)) return showAuthErr('Username 3-20 karakter: huruf kecil, angka, titik, garis bawah.');
+  if(pass.length < 6) return showAuthErr('Password minimal 6 karakter.');
+
+  const email = usernameToEmail(uname);
+  $('#authSubmit').disabled = true;
+  try {
+    if(authMode === 'register'){
+      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { username: uname } } });
+      if(error) throw error;
+      if(!data.session){
+        showAuthErr('Pendaftaran berhasil, tapi login otomatis gagal. Di dashboard Supabase, matikan "Confirm email" pada Authentication \u2192 Sign In / Providers \u2192 Email, lalu coba masuk manual.');
+        $('#authSubmit').disabled = false;
+        return;
+      }
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+      if(error) throw error;
+    }
+    $('#au-pass').value = '';
+  } catch(e){
+    showAuthErr(translateAuthError(e));
+  }
+  $('#authSubmit').disabled = false;
+}
+$('#authSubmit').addEventListener('click', handleAuthSubmit);
+$('#au-pass').addEventListener('keydown', e => { if(e.key === 'Enter') handleAuthSubmit(); });
+$('#au-user').addEventListener('keydown', e => { if(e.key === 'Enter') $('#au-pass').focus(); });
+
+$('#logoutBtn').addEventListener('click', async () => {
+  devices.forEach(d => disconnectDevice(d.id));
+  devices = [];
+  render();
+  await sb.auth.signOut();
+});
+
+function showAuthScreen(){
+  $('#authScreen').hidden = false;
+  $('#appScreen').hidden = true;
+}
+async function showAppScreen(user){
+  currentUser = {
+    id: user.id,
+    username: (user.user_metadata && user.user_metadata.username) || (user.email || '').split('@')[0]
+  };
+  $('#userChip').textContent = '@' + currentUser.username;
+  $('#authScreen').hidden = true;
+  $('#appScreen').hidden = false;
+  await refreshDevicesFromDB();
+}
+
+/* ---------------- boot ---------------- */
+$('#addBtn').addEventListener('click', () => openDialog(null));
+$('#empty').addEventListener('click', () => openDialog(null));
+$('#reconnectAll').addEventListener('click', () => {
+  devices.forEach(d => { disconnectDevice(d.id); connectDevice(d); });
+});
+
 (async function boot(){
-  devices = loadDevices();
-  render();
   await loadBrokerConfig();
-  render();
-  devices.forEach(connectDevice);
+  if(!sb){
+    showAuthErr('Database belum dikonfigurasi. Set SUPABASE_URL & SUPABASE_ANON_KEY di Environment Variables Vercel, lalu redeploy.');
+    return;
+  }
+  sb.auth.onAuthStateChange((event, session) => {
+    if(session && session.user){
+      showAppScreen(session.user);
+    } else {
+      devices.forEach(d => disconnectDevice(d.id));
+      devices = [];
+      currentUser = null;
+      render();
+      showAuthScreen();
+    }
+  });
 })();
 
 document.addEventListener('visibilitychange', () => {
