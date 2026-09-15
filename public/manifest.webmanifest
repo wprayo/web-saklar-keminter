@@ -1,0 +1,13 @@
+{
+  "name": "Panel Saklar Keminter",
+  "short_name": "Keminter",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#141618",
+  "theme_color": "#141618",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
