@@ -441,7 +441,12 @@ const collapsed = new Set();  // id perangkat yang ditutup
 /* ---------------- akun & database ---------------- */
 function sanitizeUsername(u){ return String(u || '').trim().toLowerCase(); }
 function validUsername(u){ return /^[a-z0-9_.]{3,20}$/.test(u); }
-function usernameToEmail(u){ return u + '@users.keminter.app'; }
+// Supabase (hosted) menolak domain karangan yang tidak punya catatan DNS/MX
+// nyata (mis. "keminter.app" tidak pernah didaftarkan). gmail.com dipakai
+// murni sebagai domain penampung ID, BUKAN alamat yang benar-benar dikirimi
+// surel — makanya "Confirm email" WAJIB tetap OFF di Authentication Settings,
+// supaya Supabase tidak pernah mencoba mengirim apa pun ke domain ini.
+function usernameToEmail(u){ return u + '@gmail.com'; }
 
 function rowToDevice(row){
   return {
