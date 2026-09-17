@@ -193,10 +193,66 @@
   .danger{background:transparent;border:1px solid #5A2A2C;color:#F09296}
   .danger:hover{background:#2A1719}
 
-  @media (max-width:520px){
-    .plate h1{font-size:17px}
-    .grid2{grid-template-columns:1fr}
+  /* ---------- Dropdown Menu ---------- */
+  .user-dropdown-wrap {
+    position: relative;
   }
+  #userChipBtn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13.5px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease;
+  }
+  #userChipBtn:hover {
+    background: var(--panel-2);
+  }
+  .user-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    min-width: 160px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    z-index: 10;
+  }
+  .user-dropdown-menu .ghost {
+    width: 100%;
+    text-align: left;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+  }
+  .user-dropdown-menu .ghost.danger {
+    color: #F09296;
+  }
+  .user-dropdown-menu .ghost.danger:hover {
+    background: #2A1719;
+  }
+
+  @media (max-width:520px){
+    .plate { flex-wrap: wrap; padding: 12px 0; }
+    .plate .spacer { flex-basis: 100%; margin: 0; }
+    
+    /* Ubah bagian ini agar bungkus dropdown yang bergeser ke kanan */
+    .user-dropdown-wrap { margin-left: auto; } 
+    
+    .plate h1 { font-size: 17px; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+
   @media (prefers-reduced-motion:reduce){
     *{transition:none !important;animation:none !important}
   }
@@ -236,7 +292,7 @@
       <div class="bolt" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>
       </div>
-      <h1>Panel Saklar Keminter</h1>
+      <h1>Saklar Keminter</h1>
       <p class="auth-sub" id="authSub">Masuk untuk mengelola perangkatmu.</p>
     </div>
 
@@ -269,10 +325,23 @@
       <p id="summary">Memuat perangkat…</p>
     </div>
     <div class="spacer"></div>
-    <span class="userchip mono" id="userChip"></span>
-    <button class="icon-btn" id="pwBtn" title="Ganti password">
-      <svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.5 12.5 20 3M20 3h-4M20 3v4"/></svg>
-    </button>
+    
+    <!-- Bungkus user dan menu dalam satu container -->
+    <div class="user-dropdown-wrap">
+      <!-- Tombol User (menggantikan tulisan span biasa) -->
+      <button class="userchip mono" id="userChipBtn">
+        <span id="userChip"></span>
+        <!-- Icon panah bawah -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+
+      <!-- Kotak Menu Dropdown -->
+      <div class="user-dropdown-menu" id="userMenu" hidden>
+        <button class="ghost" id="pwBtn">Ganti Password</button>
+        <button class="ghost" id="reconnectAll">Sambung ulang</button>
+        <button class="ghost danger" id="logoutBtn">Keluar</button>
+      </div>
+    </div>
     <button class="ghost" id="reconnectAll">Sambung ulang</button>
     <button class="ghost" id="logoutBtn">Keluar</button>
   </div>
@@ -936,6 +1005,22 @@ $('#addBtn').addEventListener('click', () => openDialog(null));
 $('#empty').addEventListener('click', () => openDialog(null));
 $('#reconnectAll').addEventListener('click', () => {
   devices.forEach(d => { disconnectDevice(d.id); connectDevice(d); });
+});
+
+/* ---------------- Dropdown Menu ---------------- */
+const userChipBtn = document.getElementById('userChipBtn');
+const userMenu = document.getElementById('userMenu');
+
+userChipBtn.addEventListener('click', (e) => {
+  e.stopPropagation(); // Mencegah event klik merambat ke document
+  userMenu.hidden = !userMenu.hidden;
+});
+
+// Tutup menu jika user klik di sembarang tempat (di luar kotak menu)
+document.addEventListener('click', (e) => {
+  if (!userMenu.contains(e.target) && e.target !== userChipBtn) {
+    userMenu.hidden = true;
+  }
 });
 
 /* ---------------- auth screen ---------------- */
