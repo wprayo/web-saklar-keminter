@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#141618" />
+<title>Keminter — Panel Saklar</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Keminter" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#141618;
+    --panel:#1C2023;
+    --panel-2:#23282C;
+    --line:#2F3539;
+    --ink:#E7EAEB;
+    --ink-dim:#8B9599;
+    --brass:#D9A441;
+    --lamp-on:#5BD68A;
+    --lamp-wait:#7C878C;
+    --lamp-off:#E5484D;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:16px;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:110px;
+  }
+  .mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  .wrap{max-width:720px;margin:0 auto;padding:0 18px}
+
+  /* ---------- Nameplate ---------- */
+  header{
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#1A1E21 0%,var(--bg) 100%);
+    position:sticky;top:0;z-index:5;
+    backdrop-filter:blur(6px);
+  }
+  .plate{display:flex;align-items:center;gap:14px;padding:16px 0}
+  .plate h1{
+    font-size:19px;font-weight:700;letter-spacing:-.01em;margin:0;
+  }
+  .plate p{margin:2px 0 0;font-size:13px;color:var(--ink-dim)}
+  .bolt{
+    width:38px;height:38px;flex:none;border-radius:9px;
+    border:1px solid var(--line);background:var(--panel-2);
+    display:grid;place-items:center;color:var(--brass);
+  }
+  .plate .spacer{margin-left:auto}
+  .ghost{
+    background:transparent;border:1px solid var(--line);color:var(--ink-dim);
+    font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;cursor:pointer;
+  }
+  .ghost:hover{color:var(--ink);border-color:#404749}
+
+  /* ---------- Notice ---------- */
+  .notice{
+    margin:16px 0 0;padding:12px 14px;border-radius:10px;
+    border:1px solid #4A3C1C;background:#241F12;color:#EBD9A8;font-size:13.5px;
+  }
+  .notice b{color:var(--brass)}
+
+  /* ---------- Device card ---------- */
+  .cards{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .card-head{display:flex;align-items:flex-start;gap:12px;padding:14px 14px}
+  .lamp{
+    width:12px;height:12px;border-radius:50%;flex:none;margin-top:6px;
+    background:var(--lamp-off);box-shadow:0 0 0 3px rgba(229,72,77,.12);
+    transition:background .18s ease, box-shadow .18s ease;
+  }
+  .lamp.wait{background:var(--lamp-wait);box-shadow:0 0 0 3px rgba(124,135,140,.14)}
+  .lamp.on{background:var(--lamp-on);box-shadow:0 0 0 3px rgba(91,214,138,.14),0 0 10px rgba(91,214,138,.45)}
+  .head-text{min-width:0;flex:1}
+  .head-text h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .meta{font-size:12.5px;color:var(--ink-dim);margin-top:3px;word-break:break-all}
+  .state-line{font-size:12.5px;margin-top:5px;color:var(--ink-dim)}
+  .state-line.bad{color:#F09296}
+  .head-act{display:flex;gap:2px;flex:none}
+  .icon-btn{
+    width:36px;height:36px;border-radius:8px;border:1px solid transparent;
+    background:transparent;color:var(--ink-dim);cursor:pointer;display:grid;place-items:center;
+  }
+  .icon-btn:hover:not(:disabled){background:var(--panel-2);color:var(--ink)}
+  .icon-btn:disabled{opacity:.35;cursor:not-allowed}
+  .icon-btn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .spin{animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .switches{border-top:1px solid var(--line);padding:4px 14px 10px}
+  .sw-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #22272A}
+  .sw-row:last-child{border-bottom:none}
+  .sw-row .nm{flex:1;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sw-row .ch{font-size:11.5px;color:#5E686C;flex:none}
+
+  /* rocker switch — panel style, not a pill */
+  .rocker{
+    position:relative;width:62px;height:34px;flex:none;padding:3px;
+    border:1px solid var(--line);border-radius:6px;background:#191D20;
+    cursor:pointer;transition:background .15s ease,border-color .15s ease;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.5);
+  }
+  .rocker .key{
+    display:block;width:26px;height:26px;border-radius:4px;
+    background:#3A4145;box-shadow:0 1px 2px rgba(0,0,0,.6);
+    transform:translateX(0);transition:transform .16s cubic-bezier(.3,.8,.4,1),background .16s ease;
+  }
+  .rocker[aria-checked="true"]{background:rgba(91,214,138,.14);border-color:rgba(91,214,138,.5)}
+  .rocker[aria-checked="true"] .key{transform:translateX(28px);background:var(--lamp-on)}
+  .rocker:disabled{opacity:.35;cursor:not-allowed}
+  .rocker:focus-visible,.icon-btn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
+    outline:2px solid var(--brass);outline-offset:2px
+  }
+
+  /* ---------- Empty ---------- */
+  .empty{
+    margin-top:40px;text-align:center;padding:40px 20px;
+    border:1px dashed var(--line);border-radius:var(--radius);color:var(--ink-dim);
+  }
+  .empty h3{color:var(--ink);font-size:17px;margin:0 0 6px;font-weight:600}
+  .empty p{margin:0;font-size:14px}
+
+  /* ---------- Add bar ---------- */
+  .addbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:6;
+    background:linear-gradient(180deg,rgba(20,22,24,0) 0%,var(--bg) 45%);
+    padding:24px 18px calc(18px + env(safe-area-inset-bottom));
+  }
+  .addbar .inner{max-width:720px;margin:0 auto}
+  .primary{
+    width:100%;font:inherit;font-weight:600;font-size:15px;
+    background:var(--brass);color:#20180A;border:none;border-radius:10px;
+    padding:14px;cursor:pointer;
+  }
+  .primary:hover{background:#E6B252}
+
+  /* ---------- Dialog ---------- */
+  dialog{
+    border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:14px;padding:0;width:min(560px,calc(100vw - 28px));max-height:88vh;
+  }
+  dialog::backdrop{background:rgba(8,9,10,.72)}
+  .dlg-head{padding:18px 20px 0}
+  .dlg-head h3{margin:0;font-size:18px;font-weight:600}
+  form{display:block}
+  .dlg-body{padding:16px 20px;overflow-y:auto;max-height:calc(88vh - 150px)}
+  .dlg-foot{
+    display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;
+    border-top:1px solid var(--line);background:#1A1E21;
+  }
+  .dlg-foot .primary{width:auto;padding:11px 20px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:13px;color:var(--ink-dim);margin-bottom:6px}
+  .field input,.field select{
+    width:100%;font:inherit;font-size:15px;color:var(--ink);
+    background:#15181A;border:1px solid var(--line);border-radius:8px;padding:11px 12px;
+  }
+  .field input::placeholder{color:#565F63}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .toggle-row{
+    display:flex;align-items:center;gap:12px;padding:12px 0;
+    border-top:1px solid var(--line);margin-bottom:14px;
+  }
+  .toggle-row .t-txt{flex:1}
+  .toggle-row .t-txt strong{display:block;font-size:14.5px;font-weight:600}
+  .toggle-row .t-txt span{font-size:12.5px;color:var(--ink-dim)}
+  .sub{
+    border-left:2px solid var(--line);padding-left:14px;margin:0 0 14px;
+  }
+  .hint{font-size:12.5px;color:var(--ink-dim);margin:-8px 0 14px}
+  .danger{background:transparent;border:1px solid #5A2A2C;color:#F09296}
+  .danger:hover{background:#2A1719}
+
+  @media (max-width:520px){
+    .plate h1{font-size:17px}
+    .grid2{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important;animation:none !important}
+  }
+
+  /* ---------- Auth screen ---------- */
+  .auth-wrap{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:24px;
+  }
+  .auth-card{
+    width:100%;max-width:380px;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:28px 24px;
+  }
+  .auth-head{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:22px}
+  .auth-head .bolt{margin-bottom:12px}
+  .auth-head h1{font-size:19px;font-weight:700;margin:0;letter-spacing:-.01em}
+  .auth-sub{font-size:13.5px;color:var(--ink-dim);margin:6px 0 0;text-align:center}
+  .auth-switch{text-align:center;font-size:13.5px;color:var(--ink-dim);margin:14px 0 0}
+  .linklike{
+    background:none;border:none;color:var(--brass);font:inherit;font-size:inherit;
+    padding:0;margin-left:4px;cursor:pointer;text-decoration:underline;
+  }
+  .linklike:hover{color:#E6B252}
+  .userchip{font-size:13px;color:var(--ink-dim);margin-right:2px;white-space:nowrap}
+
+  @media (max-width:400px){
+    .auth-card{padding:24px 18px}
+  }
+</style>
+</head>
+<body>
+
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-head">
+      <div class="bolt" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>
+      </div>
+      <h1>Panel Saklar Keminter</h1>
+      <p class="auth-sub" id="authSub">Masuk untuk mengelola perangkatmu.</p>
+    </div>
+
+    <div class="field">
+      <label for="au-user">Username</label>
+      <input id="au-user" class="mono" autocomplete="username" placeholder="mis. budi123" />
+    </div>
+    <div class="field">
+      <label for="au-pass">Password</label>
+      <input id="au-pass" type="password" autocomplete="current-password" placeholder="minimal 6 karakter" />
+    </div>
+    <p class="hint" id="authErr" hidden></p>
+    <button class="primary" id="authSubmit">Masuk</button>
+    <p class="auth-switch">
+      <span id="authSwitchText">Belum punya akun?</span>
+      <button type="button" class="linklike" id="authSwitchBtn">Daftar</button>
+    </p>
+  </div>
+</div>
+
+<div id="appScreen" hidden>
+
+<header>
+  <div class="wrap plate">
+    <div class="bolt" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>
+    </div>
+    <div>
+      <h1>Panel Saklar Keminter</h1>
+      <p id="summary">Memuat perangkat…</p>
+    </div>
+    <div class="spacer"></div>
+    <span class="userchip mono" id="userChip"></span>
+    <button class="icon-btn" id="pwBtn" title="Ganti password">
+      <svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.5 12.5 20 3M20 3h-4M20 3v4"/></svg>
+    </button>
+    <button class="ghost" id="reconnectAll">Sambung ulang</button>
+    <button class="ghost" id="logoutBtn">Keluar</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="dbErr" class="notice" hidden></div>
+  <div id="mixedWarn" class="notice" hidden>
+    <b>Sambungan ws:// diblokir browser.</b> Halaman ini dibuka lewat HTTPS, jadi broker harus memakai <span class="mono">wss://</span>. Ubah protokol perangkat ke WSS, atau buka aplikasi ini dari alamat http lokal.
+  </div>
+  <div class="cards" id="cards"></div>
+  <div class="empty" id="empty" hidden>
+    <h3>Belum ada perangkat</h3>
+    <p>Tambahkan perangkat dengan kode dan token yang sama seperti di ESP.</p>
+  </div>
+</main>
+
+<div class="addbar">
+  <div class="inner">
+    <button class="primary" id="addBtn">Tambah perangkat</button>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="frm">
+    <div class="dlg-head"><h3 id="dlgTitle">Tambah perangkat</h3></div>
+    <div class="dlg-body">
+
+      <div class="field">
+        <label for="f-name">Nama perangkat</label>
+        <input id="f-name" placeholder="Lampu Teras" autocomplete="off" />
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="f-code">Device code</label>
+          <input id="f-code" class="mono" placeholder="ESP001" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="f-token">Device token</label>
+          <input id="f-token" type="password" placeholder="••••••" autocomplete="new-password" />
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="t-txt">
+          <strong>Pakai broker bawaan</strong>
+          <span id="defBrokerLabel" class="mono"></span>
+        </div>
+        <button type="button" class="rocker" id="f-default" role="switch" aria-checked="true"><span class="key"></span></button>
+      </div>
+
+      <div id="customBox" class="sub" hidden>
+        <div class="field">
+          <label for="f-host">Alamat broker</label>
+          <input id="f-host" class="mono" placeholder="broker.contoh.id" autocomplete="off" />
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="f-proto">Protokol</label>
+            <select id="f-proto">
+              <option value="wss">WSS (WebSocket aman)</option>
+              <option value="ws">WS (tanpa enkripsi)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-port">Port</label>
+            <input id="f-port" class="mono" inputmode="numeric" placeholder="8084" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-path">Path WebSocket</label>
+          <input id="f-path" class="mono" placeholder="/mqtt" autocomplete="off" />
+        </div>
+        <div class="toggle-row">
+          <div class="t-txt">
+            <strong>Broker minta login</strong>
+            <span>Isi kalau broker butuh username dan password.</span>
+          </div>
+          <button type="button" class="rocker" id="f-auth" role="switch" aria-checked="false"><span class="key"></span></button>
+        </div>
+        <div id="authBox" hidden>
+          <div class="grid2">
+            <div class="field">
+              <label for="f-user">Username broker</label>
+              <input id="f-user" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="f-pass">Password broker</label>
+              <input id="f-pass" type="password" autocomplete="new-password" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="f-count">Jumlah saklar aktif</label>
+        <select id="f-count">
+          <option value="1">1 saklar</option>
+          <option value="2">2 saklar</option>
+          <option value="3">3 saklar</option>
+          <option value="4" selected>4 saklar</option>
+        </select>
+      </div>
+      <div id="swNames"></div>
+
+      <p class="hint" id="formErr" hidden></p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="ghost danger" id="dlgDelete" hidden>Hapus</button>
+      <button type="button" class="ghost" id="dlgCancel">Batal</button>
+      <button type="button" class="primary" id="dlgSave">Simpan</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="pwDlg">
+  <div class="dlg-head"><h3>Ganti Password</h3></div>
+  <div class="dlg-body">
+    <div class="field">
+      <label for="pw-current">Password saat ini</label>
+      <input id="pw-current" type="password" autocomplete="current-password" />
+    </div>
+    <div class="field">
+      <label for="pw-new">Password baru</label>
+      <input id="pw-new" type="password" autocomplete="new-password" placeholder="minimal 6 karakter" />
+    </div>
+    <p class="hint" id="pwErr" hidden></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="ghost" id="pwCancel">Batal</button>
+    <button type="button" class="primary" id="pwSave">Simpan</button>
+  </div>
+</dialog>
+
+</div>
+
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+/* =========================================================
+   BROKER BAWAAN
+   Nilai di bawah ini cuma cadangan kalau /api/config tidak ada
+   (misal dibuka langsung dari file lokal). Di Vercel, isi lewat
+   Environment Variables — lihat README.
+   Browser hanya bisa MQTT lewat WebSocket, jadi port di sini
+   adalah port WebSocket broker (EMQX: 8084, Mosquitto: 9001).
+   ========================================================= */
+let DEFAULT_BROKER = {
+  host: '',
+  protocol: 'wss',
+  port: 8084,
+  path: '/mqtt',
+  user: '',
+  pass: ''
+};
+const ACK_TIMEOUT = 3500;
+
+async function loadBrokerConfig(){
+  try {
+    const res = await fetch('/api/config', {cache:'no-store'});
+    if(!res.ok) return;
+    const cfg = await res.json();
+    if(cfg && cfg.host){
+      DEFAULT_BROKER = {
+        host: cfg.host,
+        protocol: cfg.protocol || 'wss',
+        port: Number(cfg.port) || 8084,
+        path: cfg.path || '/mqtt',
+        user: cfg.user || '',
+        pass: cfg.pass || ''
+      };
+    }
+  } catch(e){ /* tetap pakai nilai cadangan di atas */ }
+}
+/* ========================================================= */
+
+let devices = [];
+const conns = new Map();      // id -> {client, connected, connecting, esp, error, ackTimer}
+const collapsed = new Set();  // id perangkat yang ditutup
+let currentUser = null;       // {username}
+
+/* ---------------- klien API kecil ---------------- */
+async function apiGet(url){
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+async function apiSend(method, url, body){
+  const res = await fetch(url, {
+    method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body || {})
+  });
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+const apiPost = (url, body) => apiSend('POST', url, body);
+const apiPut = (url, body) => apiSend('PUT', url, body);
+async function apiDelete(url){
+  const res = await fetch(url, {method:'DELETE'});
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+/* ---------------- akun & device lewat /api sendiri ---------------- */
+function sanitizeUsername(u){ return String(u || '').trim().toLowerCase(); }
+function validUsername(u){ return /^[a-z0-9_.]{3,20}$/.test(u); }
+
+function showDbError(msg){ const e = $('#dbErr'); e.innerHTML = '<b>Gagal memuat data.</b> ' + esc(msg); e.hidden = false; }
+function hideDbError(){ $('#dbErr').hidden = true; }
+
+async function refreshDevicesFromDB(){
+  devices.forEach(d => disconnectDevice(d.id));
+  try {
+    devices = await apiGet('/api/devices');
+    hideDbError();
+  } catch(e){
+    devices = [];
+    showDbError(e.message);
+  }
+  render();
+  devices.forEach(connectDevice);
+}
+async function insertDeviceDB(payload){ return apiPost('/api/devices', payload); }
+async function updateDeviceDB(id, payload){ return apiPut('/api/devices', Object.assign({id}, payload)); }
+async function updateSwitchStatesDB(id, switchStates){
+  try { await apiPut('/api/devices', {id, switchStates}); }
+  catch(e){ console.error('Gagal menyimpan status saklar:', e.message); }
+}
+async function deleteDeviceDB(id){ return apiDelete('/api/devices?id=' + encodeURIComponent(id)); }
+
+function getDevice(id){ return devices.find(d => d.id === id) || null; }
+
+function brokerOf(dev){
+  return dev.useDefault ? {
+    host: DEFAULT_BROKER.host, protocol: DEFAULT_BROKER.protocol,
+    port: DEFAULT_BROKER.port, path: DEFAULT_BROKER.path,
+    user: DEFAULT_BROKER.user, pass: DEFAULT_BROKER.pass
+  } : {
+    host: dev.host, protocol: dev.protocol, port: dev.port, path: dev.path || '/mqtt',
+    user: dev.useAuth ? dev.user : '', pass: dev.useAuth ? dev.pass : ''
+  };
+}
+function brokerUrl(dev){
+  const b = brokerOf(dev);
+  let p = b.path || '';
+  if(p && !p.startsWith('/')) p = '/' + p;
+  return b.protocol + '://' + b.host + ':' + b.port + p;
+}
+const topicStatus = d => 'saklar/keminter/' + d.deviceCode + '/status';
+const topicCheck  = d => 'saklar/keminter/' + d.deviceCode + '/status/cek';
+const topicSet    = d => 'saklar/keminter/' + d.deviceCode + '/set';
+
+/* ---------------- mqtt ---------------- */
+function connState(id){
+  if(!conns.has(id)) conns.set(id, {client:null, connected:false, connecting:false, esp:false, error:null, ackTimer:null});
+  return conns.get(id);
+}
+
+function connectDevice(dev){
+  const st = connState(dev.id);
+  if(st.client){ try { st.client.end(true); } catch(e){} }
+  clearTimeout(st.ackTimer);
+  st.client = null; st.connected = false; st.esp = false; st.error = null; st.connecting = true;
+  paintCard(dev.id);
+
+  const b = brokerOf(dev);
+  if(!b.host){
+    st.connecting = false;
+    st.error = 'Broker bawaan belum diatur. Isi environment variable MQTT_HOST di Vercel, atau pilih broker sendiri lewat Ubah perangkat.';
+    paintCard(dev.id);
+    return;
+  }
+  const opts = {
+    clientId: 'web_' + Date.now().toString(36) + Math.random().toString(16).slice(2,6),
+    clean: true,
+    keepalive: 10,
+    reconnectPeriod: 4000,
+    connectTimeout: 8000,
+    protocolVersion: 4
+  };
+  if(b.user){ opts.username = b.user; opts.password = b.pass; }
+
+  let client;
+  try {
+    client = mqtt.connect(brokerUrl(dev), opts);
+  } catch(err){
+    st.connecting = false;
+    st.error = 'Alamat broker tidak valid.';
+    paintCard(dev.id);
+    return;
+  }
+  st.client = client;
+
+  client.on('connect', () => {
+    const d = getDevice(dev.id); if(!d) return;
+    st.connected = true; st.connecting = false; st.error = null;
+    client.subscribe(topicStatus(d), {qos:0});
+    requestStatus(d.id);
+    paintCard(d.id); paintSummary();
+  });
+  client.on('reconnect', () => { st.connecting = true; paintCard(dev.id); });
+  client.on('close', () => {
+    st.connected = false; st.esp = false;
+    clearTimeout(st.ackTimer);
+    paintCard(dev.id); paintSummary();
+  });
+  client.on('error', (err) => {
+    st.error = friendlyError(err);
+    paintCard(dev.id);
+  });
+  client.on('message', (topic, payload) => {
+    const d = getDevice(dev.id); if(!d) return;
+    if(topic !== topicStatus(d)) return;
+    applyStatus(d, payload.toString());
+  });
+}
+
+function friendlyError(err){
+  const m = (err && err.message) ? err.message : String(err);
+  if(/Not authorized|Bad username|Connection refused/i.test(m)) return 'Broker menolak login. Cek username dan password.';
+  if(/WebSocket|closed before|failed/i.test(m)) return 'Tidak bisa membuka WebSocket. Cek alamat, port, dan path broker.';
+  return m;
+}
+
+function disconnectDevice(id){
+  const st = conns.get(id);
+  if(!st) return;
+  clearTimeout(st.ackTimer);
+  if(st.client){ try { st.client.end(true); } catch(e){} }
+  conns.delete(id);
+}
+
+function armAck(id){
+  const st = connState(id);
+  clearTimeout(st.ackTimer);
+  st.ackTimer = setTimeout(() => { st.esp = false; paintCard(id); paintSummary(); }, ACK_TIMEOUT);
+}
+
+function applyStatus(dev, text){
+  let data;
+  try { data = JSON.parse(text); } catch(e){ return; }
+  const st = connState(dev.id);
+  clearTimeout(st.ackTimer);
+  st.esp = true;
+  ['s1','s2','s3','s4'].forEach(k => {
+    if(typeof data[k] === 'boolean') dev.switchStates[k] = data[k];
+  });
+  updateSwitchStatesDB(dev.id, dev.switchStates);
+  paintCard(dev.id); paintSummary();
+}
+
+function requestStatus(id){
+  const dev = getDevice(id); const st = connState(id);
+  if(!dev || !st.connected || !st.client) return;
+  armAck(id);
+  st.client.publish(topicCheck(dev), JSON.stringify({command:'GET_STATUS', token:dev.secretToken}), {qos:0});
+  paintCard(id);
+}
+
+function toggleSwitch(id, index, value){
+  const dev = getDevice(id); const st = connState(id);
+  if(!dev || !st.connected || !st.client) return;
+  const key = 's' + (index + 1);
+  armAck(id);
+  st.client.publish(topicSet(dev), JSON.stringify({
+    command: key + '_' + (value ? 'ON' : 'OFF'),
+    token: dev.secretToken
+  }), {qos:0});
+  dev.switchStates[key] = value;
+  updateSwitchStatesDB(id, dev.switchStates);
+  paintCard(id);
+}
+
+/* ---------------- render ---------------- */
+const $ = sel => document.querySelector(sel);
+const cardsEl = $('#cards');
+const emptyEl = $('#empty');
+
+const ICON = {
+  refresh:'<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
+  edit:'<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  down:'<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
+  up:'<svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>'
+};
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function render(){
+  cardsEl.innerHTML = '';
+  devices.forEach(dev => cardsEl.appendChild(buildCard(dev)));
+  emptyEl.hidden = devices.length > 0;
+  devices.forEach(d => paintCard(d.id));
+  paintSummary();
+  checkMixedContent();
+}
+
+function buildCard(dev){
+  const el = document.createElement('section');
+  el.className = 'card';
+  el.dataset.id = dev.id;
+  const open = !collapsed.has(dev.id);
+
+  const rows = [];
+  for(let i = 0; i < dev.activeSwitches; i++){
+    rows.push(
+      '<div class="sw-row">' +
+        '<span class="nm">' + esc(dev.switchNames[i] || ('Saklar ' + (i+1))) + '</span>' +
+        '<span class="ch mono">s' + (i+1) + '</span>' +
+        '<button class="rocker" role="switch" aria-checked="false" aria-label="' + esc(dev.switchNames[i]) + '" data-act="toggle" data-i="' + i + '"><span class="key"></span></button>' +
+      '</div>'
+    );
+  }
+
+  el.innerHTML =
+    '<div class="card-head">' +
+      '<span class="lamp"></span>' +
+      '<div class="head-text">' +
+        '<h2>' + esc(dev.name) + '</h2>' +
+        '<div class="meta mono">' + esc(dev.deviceCode) + ' · ' + esc(dev.useDefault ? 'broker bawaan' : brokerUrl(dev)) + '</div>' +
+        '<div class="state-line" data-role="state"></div>' +
+      '</div>' +
+      '<div class="head-act">' +
+        '<button class="icon-btn" data-act="refresh" title="Minta status">' + ICON.refresh + '</button>' +
+        '<button class="icon-btn" data-act="fold" title="Buka tutup">' + (open ? ICON.up : ICON.down) + '</button>' +
+        '<button class="icon-btn" data-act="edit" title="Ubah perangkat">' + ICON.edit + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="switches"' + (open ? '' : ' hidden') + '>' + rows.join('') + '</div>';
+
+  el.addEventListener('click', ev => {
+    const btn = ev.target.closest('[data-act]');
+    if(!btn || btn.disabled) return;
+    const act = btn.dataset.act;
+    if(act === 'refresh') requestStatus(dev.id);
+    if(act === 'edit') openDialog(dev.id);
+    if(act === 'fold'){
+      if(collapsed.has(dev.id)) collapsed.delete(dev.id); else collapsed.add(dev.id);
+      const box = el.querySelector('.switches');
+      box.hidden = collapsed.has(dev.id);
+      btn.innerHTML = collapsed.has(dev.id) ? ICON.down : ICON.up;
+    }
+    if(act === 'toggle'){
+      const i = Number(btn.dataset.i);
+      const next = btn.getAttribute('aria-checked') !== 'true';
+      toggleSwitch(dev.id, i, next);
+    }
+  });
+
+  return el;
+}
+
+function paintCard(id){
+  const dev = getDevice(id);
+  const el = cardsEl.querySelector('.card[data-id="' + CSS.escape(id) + '"]');
+  if(!dev || !el) return;
+  const st = connState(id);
+
+  const lamp = el.querySelector('.lamp');
+  lamp.classList.remove('on','wait');
+  if(st.connected && st.esp) lamp.classList.add('on');
+  else if(st.connected) lamp.classList.add('wait');
+
+  const line = el.querySelector('[data-role="state"]');
+  line.classList.toggle('bad', !!st.error);
+  if(st.error) line.textContent = st.error;
+  else if(st.connecting && !st.connected) line.textContent = 'Menyambung ke broker…';
+  else if(!st.connected) line.textContent = 'Terputus dari broker.';
+  else if(!st.esp) line.textContent = 'Broker tersambung, perangkat belum menjawab.';
+  else line.textContent = 'Perangkat aktif.';
+
+  const refreshBtn = el.querySelector('[data-act="refresh"]');
+  refreshBtn.disabled = !st.connected;
+  refreshBtn.firstElementChild.classList.toggle('spin', st.connected && !st.esp && !!st.ackTimer);
+
+  el.querySelectorAll('[data-act="toggle"]').forEach(btn => {
+    const i = Number(btn.dataset.i);
+    const on = !!dev.switchStates['s' + (i+1)];
+    btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    btn.disabled = !st.connected;
+  });
+}
+
+function paintSummary(){
+  const total = devices.length;
+  if(total === 0){ $('#summary').textContent = 'Belum ada perangkat terdaftar.'; return; }
+  const live = devices.filter(d => { const s = conns.get(d.id); return s && s.connected && s.esp; }).length;
+  $('#summary').textContent = live + ' dari ' + total + ' perangkat aktif';
+}
+
+function checkMixedContent(){
+  const https = location.protocol === 'https:';
+  const anyWs = devices.some(d => brokerOf(d).protocol === 'ws');
+  $('#mixedWarn').hidden = !(https && anyWs);
+}
+
+/* ---------------- dialog ---------------- */
+const dlg = $('#dlg');
+let editingId = null;
+
+function setRocker(btn, on){ btn.setAttribute('aria-checked', on ? 'true' : 'false'); }
+function isRockerOn(btn){ return btn.getAttribute('aria-checked') === 'true'; }
+
+$('#f-default').addEventListener('click', () => {
+  const on = !isRockerOn($('#f-default'));
+  setRocker($('#f-default'), on);
+  $('#customBox').hidden = on;
+});
+$('#f-auth').addEventListener('click', () => {
+  const on = !isRockerOn($('#f-auth'));
+  setRocker($('#f-auth'), on);
+  $('#authBox').hidden = !on;
+});
+$('#f-proto').addEventListener('change', () => {
+  const p = $('#f-proto').value;
+  const cur = $('#f-port').value.trim();
+  if(p === 'ws' && (cur === '' || cur === '8084')) $('#f-port').value = '8083';
+  if(p === 'wss' && (cur === '' || cur === '8083')) $('#f-port').value = '8084';
+});
+$('#f-count').addEventListener('change', () => renderNameFields());
+
+function renderNameFields(values){
+  const n = Number($('#f-count').value);
+  const box = $('#swNames');
+  const prev = values || Array.from(box.querySelectorAll('input')).map(i => i.value);
+  box.innerHTML = '';
+  for(let i = 0; i < n; i++){
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+    wrap.innerHTML =
+      '<label for="sw' + i + '">Nama saklar ' + (i+1) + '</label>' +
+      '<input id="sw' + i + '" value="' + esc(prev[i] || ('Saklar ' + (i+1))) + '" autocomplete="off" />';
+    box.appendChild(wrap);
+  }
+}
+
+function openDialog(id){
+  editingId = id || null;
+  const dev = id ? getDevice(id) : null;
+  $('#dlgTitle').textContent = dev ? 'Ubah perangkat' : 'Tambah perangkat';
+  $('#dlgDelete').hidden = !dev;
+  $('#formErr').hidden = true;
+  $('#defBrokerLabel').textContent = DEFAULT_BROKER.host
+    ? DEFAULT_BROKER.protocol + '://' + DEFAULT_BROKER.host + ':' + DEFAULT_BROKER.port
+    : 'belum diatur — pakai broker sendiri di bawah';
+
+  $('#f-name').value = dev ? dev.name : '';
+  $('#f-code').value = dev ? dev.deviceCode : '';
+  $('#f-token').value = dev ? dev.secretToken : '';
+
+  const useDef = dev ? dev.useDefault : true;
+  setRocker($('#f-default'), useDef);
+  $('#customBox').hidden = useDef;
+
+  $('#f-host').value = dev && !dev.useDefault ? dev.host : '';
+  $('#f-proto').value = dev && !dev.useDefault ? dev.protocol : 'wss';
+  $('#f-port').value = dev && !dev.useDefault ? dev.port : '8084';
+  $('#f-path').value = dev && !dev.useDefault ? (dev.path || '/mqtt') : '/mqtt';
+
+  const auth = dev ? !!dev.useAuth : false;
+  setRocker($('#f-auth'), auth);
+  $('#authBox').hidden = !auth;
+  $('#f-user').value = dev ? (dev.user || '') : '';
+  $('#f-pass').value = dev ? (dev.pass || '') : '';
+
+  $('#f-count').value = String(dev ? dev.activeSwitches : 4);
+  renderNameFields(dev ? dev.switchNames : ['Saklar 1','Saklar 2','Saklar 3','Saklar 4']);
+
+  dlg.showModal();
+  $('#f-name').focus();
+}
+
+function closeDialog(){ dlg.close(); editingId = null; }
+
+$('#dlgCancel').addEventListener('click', closeDialog);
+dlg.addEventListener('cancel', ev => { ev.preventDefault(); closeDialog(); });
+
+$('#dlgDelete').addEventListener('click', async () => {
+  if(!editingId) return;
+  const dev = getDevice(editingId);
+  if(!dev || !confirm('Hapus "' + dev.name + '"?')) return;
+  $('#dlgDelete').disabled = true;
+  try {
+    await deleteDeviceDB(editingId);
+  } catch(err){
+    $('#dlgDelete').disabled = false;
+    alert('Gagal menghapus: ' + err.message);
+    return;
+  }
+  $('#dlgDelete').disabled = false;
+  disconnectDevice(editingId);
+  devices = devices.filter(d => d.id !== editingId);
+  closeDialog();
+  render();
+});
+
+$('#dlgSave').addEventListener('click', async () => {
+  const err = m => { const e = $('#formErr'); e.textContent = m; e.hidden = false; };
+  const name = $('#f-name').value.trim();
+  const code = $('#f-code').value.trim();
+  const token = $('#f-token').value.trim();
+  const useDef = isRockerOn($('#f-default'));
+
+  if(!name) return err('Nama perangkat masih kosong.');
+  if(!code) return err('Device code masih kosong. Isi persis seperti di ESP.');
+  if(!token) return err('Device token masih kosong.');
+
+  const host = $('#f-host').value.trim();
+  const port = parseInt($('#f-port').value, 10);
+  if(!useDef){
+    if(!host) return err('Alamat broker masih kosong.');
+    if(!port || port < 1 || port > 65535) return err('Port broker tidak valid.');
+  }
+
+  const names = Array.from($('#swNames').querySelectorAll('input')).map((inp, i) => inp.value.trim() || ('Saklar ' + (i+1)));
+  while(names.length < 4) names.push('Saklar ' + (names.length + 1));
+
+  const old = editingId ? getDevice(editingId) : null;
+  const payload = {
+    id: old ? old.id : null,
+    name, deviceCode: code, secretToken: token,
+    useDefault: useDef,
+    host: useDef ? '' : host,
+    protocol: useDef ? DEFAULT_BROKER.protocol : $('#f-proto').value,
+    port: useDef ? DEFAULT_BROKER.port : port,
+    path: useDef ? DEFAULT_BROKER.path : ($('#f-path').value.trim() || '/mqtt'),
+    useAuth: useDef ? false : isRockerOn($('#f-auth')),
+    user: useDef ? '' : $('#f-user').value,
+    pass: useDef ? '' : $('#f-pass').value,
+    activeSwitches: Number($('#f-count').value),
+    switchNames: names,
+    switchStates: old ? old.switchStates : {s1:false, s2:false, s3:false, s4:false}
+  };
+
+  const changed = !old ||
+    old.useDefault !== payload.useDefault || old.host !== payload.host || old.port !== payload.port ||
+    old.protocol !== payload.protocol || old.path !== payload.path || old.useAuth !== payload.useAuth ||
+    old.user !== payload.user || old.pass !== payload.pass ||
+    old.deviceCode !== payload.deviceCode || old.secretToken !== payload.secretToken;
+
+  $('#dlgSave').disabled = true;
+  let saved;
+  try {
+    saved = old ? await updateDeviceDB(old.id, payload) : await insertDeviceDB(payload);
+  } catch(e){
+    $('#dlgSave').disabled = false;
+    return err('Gagal menyimpan: ' + e.message);
+  }
+  $('#dlgSave').disabled = false;
+
+  if(old) devices = devices.map(d => d.id === saved.id ? saved : d);
+  else devices.push(saved);
+
+  closeDialog();
+  render();
+  if(changed){ disconnectDevice(saved.id); connectDevice(saved); }
+});
+
+/* ---------------- boot ---------------- */
+$('#addBtn').addEventListener('click', () => openDialog(null));
+$('#empty').addEventListener('click', () => openDialog(null));
+$('#reconnectAll').addEventListener('click', () => {
+  devices.forEach(d => { disconnectDevice(d.id); connectDevice(d); });
+});
+
+/* ---------------- auth screen ---------------- */
+let authMode = 'login';
+
+function showAuthErr(msg){ const e = $('#authErr'); e.textContent = msg; e.hidden = false; }
+function clearAuthErr(){ $('#authErr').hidden = true; }
+
+$('#authSwitchBtn').addEventListener('click', () => {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  $('#authSubmit').textContent = authMode === 'login' ? 'Masuk' : 'Daftar';
+  $('#authSub').textContent = authMode === 'login' ? 'Masuk untuk mengelola perangkatmu.' : 'Buat akun baru, gratis.';
+  $('#authSwitchText').textContent = authMode === 'login' ? 'Belum punya akun?' : 'Sudah punya akun?';
+  $('#authSwitchBtn').textContent = authMode === 'login' ? 'Daftar' : 'Masuk';
+  clearAuthErr();
+});
+
+async function handleAuthSubmit(){
+  clearAuthErr();
+  const uname = sanitizeUsername($('#au-user').value);
+  const pass = $('#au-pass').value;
+  if(!validUsername(uname)) return showAuthErr('Username 3-20 karakter: huruf kecil, angka, titik, garis bawah.');
+  if(pass.length < 6) return showAuthErr('Password minimal 6 karakter.');
+
+  $('#authSubmit').disabled = true;
+  try {
+    const endpoint = authMode === 'register' ? '/api/auth-register' : '/api/auth-login';
+    const data = await apiPost(endpoint, { username: uname, password: pass });
+    $('#au-pass').value = '';
+    await showAppScreen(data);
+  } catch(e){
+    showAuthErr(e.message);
+  }
+  $('#authSubmit').disabled = false;
+}
+$('#authSubmit').addEventListener('click', handleAuthSubmit);
+$('#au-pass').addEventListener('keydown', e => { if(e.key === 'Enter') handleAuthSubmit(); });
+$('#au-user').addEventListener('keydown', e => { if(e.key === 'Enter') $('#au-pass').focus(); });
+
+$('#logoutBtn').addEventListener('click', async () => {
+  devices.forEach(d => disconnectDevice(d.id));
+  devices = [];
+  render();
+  try { await apiPost('/api/auth-logout', {}); } catch(e){ /* abaikan, tetap tampilkan layar login */ }
+  currentUser = null;
+  showAuthScreen();
+});
+
+$('#pwBtn').addEventListener('click', () => {
+  $('#pw-current').value = '';
+  $('#pw-new').value = '';
+  $('#pwErr').hidden = true;
+  $('#pwDlg').showModal();
+  $('#pw-current').focus();
+});
+$('#pwCancel').addEventListener('click', () => $('#pwDlg').close());
+$('#pwSave').addEventListener('click', async () => {
+  const errEl = $('#pwErr');
+  errEl.hidden = true;
+  const current = $('#pw-current').value;
+  const next = $('#pw-new').value;
+  if(!current) { errEl.textContent = 'Isi password saat ini.'; errEl.hidden = false; return; }
+  if(next.length < 6){ errEl.textContent = 'Password baru minimal 6 karakter.'; errEl.hidden = false; return; }
+
+  $('#pwSave').disabled = true;
+  try {
+    await apiPost('/api/auth-change-password', { currentPassword: current, newPassword: next });
+    $('#pwDlg').close();
+  } catch(e){
+    errEl.textContent = e.message;
+    errEl.hidden = false;
+  }
+  $('#pwSave').disabled = false;
+});
+
+function showAuthScreen(){
+  $('#authScreen').hidden = false;
+  $('#appScreen').hidden = true;
+}
+async function showAppScreen(user){
+  currentUser = { username: user.username };
+  $('#userChip').textContent = '@' + currentUser.username;
+  $('#authScreen').hidden = true;
+  $('#appScreen').hidden = false;
+  await refreshDevicesFromDB();
+}
+
+/* ---------------- boot ---------------- */
+$('#addBtn').addEventListener('click', () => openDialog(null));
+$('#empty').addEventListener('click', () => openDialog(null));
+$('#reconnectAll').addEventListener('click', () => {
+  devices.forEach(d => { disconnectDevice(d.id); connectDevice(d); });
+});
+
+(async function boot(){
+  await loadBrokerConfig();
+  try {
+    const me = await apiGet('/api/auth-me');
+    await showAppScreen(me);
+  } catch(e){
+    showAuthScreen();
+  }
+})();
+
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible') return;
+  devices.forEach(d => {
+    const st = conns.get(d.id);
+    if(!st || !st.connected) { disconnectDevice(d.id); connectDevice(d); }
+  });
+});
+</script>
+</body>
+</html>
