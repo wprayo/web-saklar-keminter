@@ -242,10 +242,21 @@
     background: #2A1719;
   }
 
-  @media (max-width:520px){
-    .wrap{margin: 0 auto; padding:0 14px}
-    .plate h1 { font-size: 17px; }
-    .grid2 { grid-template-columns: 1fr; }
+@media (max-width:520px){
+    .wrap {
+      padding: 0 20px; /* Memberi jarak aman di kiri dan kanan layar HP */
+    }
+    .plate {
+      /* Menambah jarak ekstra di bagian atas agar tidak menabrak batas atas HP */
+      padding-top: calc(24px + env(safe-area-inset-top)); 
+      padding-bottom: 16px;
+    }
+    .plate h1 {
+      font-size: 17px;
+    }
+    .grid2 {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (prefers-reduced-motion:reduce){
