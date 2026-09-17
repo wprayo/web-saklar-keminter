@@ -81,7 +81,13 @@
   .notice b{color:var(--brass)}
 
   /* ---------- Device card ---------- */
-  .cards{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+  .cards {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
   .card{
     background:var(--panel);
     border:1px solid var(--line);
