@@ -49,6 +49,9 @@ Production, Preview, dan Development:
 Setelah diubah, deploy ulang (`vercel --prod`, atau Redeploy dari dashboard) supaya terpakai.
 
 Untuk mencoba di komputer sendiri: `cp .env.example .env.local`, isi nilainya, lalu `vercel dev`.
+Catatan: session cookie login memakai flag `Secure` (wajib untuk produksi HTTPS), jadi login
+tidak akan tersimpan kalau `vercel dev` diakses lewat `http://localhost` biasa — untuk uji coba
+login, paling gampang langsung test di domain `*.vercel.app` yang sudah HTTPS.
 
 Kalau `MQTT_HOST` dikosongkan, aplikasi tetap jalan — tiap perangkat tinggal diatur
 brokernya sendiri lewat tombol Ubah perangkat.
@@ -93,57 +96,66 @@ di Flutter.
 
 ## Login & database (Supabase)
 
-Sejak versi ini, device tidak lagi disimpan di localStorage browser — tersimpan di database
-Supabase per akun, jadi bisa diakses dari HP dan laptop dengan login yang sama, dan tiap
-orang yang daftar cuma melihat device miliknya sendiri.
+Login pakai username + password milik sendiri (tabel `users` sendiri) — bukan menumpang
+sistem Auth bawaan Supabase. Browser tidak pernah bicara langsung ke Supabase; semua lewat
+serverless function di folder `api/`, yang memegang kredensial Supabase secara rahasia di
+server. Device tersimpan di database, tersinkron di semua perangkat/browser dengan login yang
+sama, dan tiap akun cuma melihat device miliknya sendiri.
 
 **1. Buat project Supabase**
 
 Daftar gratis di [supabase.com](https://supabase.com), buat project baru, tunggu sampai
-statusnya aktif (sekitar 2 menit). Catat kuat-kuat database password yang diminta saat
-membuat project (jarang dipakai langsung, tapi simpan saja).
+statusnya aktif (sekitar 2 menit).
 
 **2. Jalankan skema tabel**
 
 Buka **SQL Editor** di dashboard project, klik **New query**, tempel seluruh isi
-`sql/schema.sql` dari folder ini, lalu klik **Run**. Ini membuat tabel `devices` lengkap
-dengan Row Level Security supaya tiap user cuma bisa lihat & ubah devicenya sendiri.
+`sql/schema.sql` dari folder ini, lalu klik **Run**. Ini membuat tabel `users` dan `devices`.
 
-**3. Matikan konfirmasi email**
+**3. Salin URL dan service_role key**
 
-Aplikasi ini pakai username, bukan email asli (di baliknya disamarkan jadi
-`<username>@users.keminter.app` supaya bisa numpang sistem Auth Supabase). Karena email itu
-tidak nyata, wajib matikan verifikasinya dulu:
+Buka **Project Settings → API**. Salin nilai **Project URL** dan **service_role secret key**
+(bukan anon key — service_role perlu diklik "Reveal" dulu untuk terlihat).
 
-Buka **Authentication → Sign In / Providers → Email**, matikan toggle **Confirm email**.
-Tanpa langkah ini, akun baru tidak akan pernah bisa login karena menunggu email konfirmasi
-yang tidak mungkin terkirim.
+> **service_role key ini setara kunci master** — bisa baca/tulis seluruh database tanpa
+> terkena proteksi apa pun. Ini alasan kenapa arsitekturnya browser tidak pernah pegang key
+> ini sama sekali; cuma serverless function di server yang tahu, lewat Environment Variables
+> Vercel. Jangan pernah commit ke Git atau taruh di kode yang jalan di browser.
 
-**4. Salin URL dan anon key**
+**4. Bikin JWT_SECRET**
 
-Buka **Project Settings → API**. Salin nilai **Project URL** dan **anon public key**.
+Ini string acak untuk menandatangani session login, generate sendiri — contoh lewat terminal:
+
+```bash
+openssl rand -base64 32
+```
+
+Atau pakai string acak panjang apa saja (minimal 32 karakter), asal rahasia dan tidak dipakai
+di tempat lain.
 
 **5. Isi environment variable di Vercel**
 
-Tambahkan dua ini di Settings → Environment Variables (selain enam variabel MQTT yang sudah
-ada sebelumnya):
+Tambahkan tiga ini di Settings → Environment Variables (selain enam variabel MQTT yang sudah
+ada):
 
 | Nama | Isi dengan |
 |---|---|
-| `SUPABASE_URL` | Project URL dari langkah 4 |
-| `SUPABASE_ANON_KEY` | anon public key dari langkah 4 |
+| `SUPABASE_URL` | Project URL dari langkah 3 |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role secret key dari langkah 3 |
+| `JWT_SECRET` | string acak dari langkah 4 |
 
-Redeploy setelah menyimpan. Anon key ini memang didesain aman untuk dipakai di browser —
-bukan kredensial rahasia seperti password MQTT, keamanan datanya dijamin oleh Row Level
-Security di langkah 2, bukan oleh menyembunyikan key ini.
+Redeploy setelah menyimpan — env var baru cuma berlaku di deployment berikutnya.
 
 **6. Coba daftar**
 
 Buka situsnya, klik **Daftar**, isi username (huruf kecil/angka/titik/underscore, 3-20
-karakter) dan password (minimal 6 karakter). Setelah daftar langsung masuk otomatis dan bisa
-mulai menambah device. Siapa pun yang tahu alamat situsnya bisa mendaftar sendiri — kalau
-mau membatasi siapa saja yang boleh pakai, itu perlu ditambahkan terpisah (bisa dibantu kalau
-diperlukan nanti).
+karakter) dan password (minimal 6 karakter). Tidak ada verifikasi email sama sekali — langsung
+bisa masuk dan mulai menambah device. Password bisa diganti kapan saja lewat ikon kunci di
+pojok kanan atas setelah login.
+
+Siapa pun yang tahu alamat situsnya bisa mendaftar sendiri (mode publik) — kalau mau
+membatasi siapa saja yang boleh pakai, itu bisa ditambahkan terpisah, tinggal bilang kalau
+diperlukan.
 
 ## Sisi ESP tidak berubah
 
@@ -155,7 +167,8 @@ Topik dan payload sama persis dengan aplikasi Flutter:
 
 ## Fitur
 
-- Login & daftar dengan username + password, tiap akun cuma melihat devicenya sendiri
+- Login & daftar dengan username + password sendiri, tiap akun cuma melihat devicenya sendiri
+- Ganti password kapan saja lewat ikon kunci di header
 - Tambah, ubah, hapus perangkat; tersimpan di database Supabase, tersinkron di semua perangkat/browser
 - 1–4 saklar per perangkat dengan nama bebas
 - Broker bawaan atau broker sendiri (WS/WSS, port, path, login opsional)

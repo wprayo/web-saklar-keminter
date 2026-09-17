@@ -15,9 +15,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  [hidden] {
-    display: none !important;
-  }
   :root{
     --bg:#141618;
     --panel:#1C2023;
@@ -270,6 +267,9 @@
     </div>
     <div class="spacer"></div>
     <span class="userchip mono" id="userChip"></span>
+    <button class="icon-btn" id="pwBtn" title="Ganti password">
+      <svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.5 12.5 20 3M20 3h-4M20 3v4"/></svg>
+    </button>
     <button class="ghost" id="reconnectAll">Sambung ulang</button>
     <button class="ghost" id="logoutBtn">Keluar</button>
   </div>
@@ -385,10 +385,28 @@
   </form>
 </dialog>
 
+<dialog id="pwDlg">
+  <div class="dlg-head"><h3>Ganti Password</h3></div>
+  <div class="dlg-body">
+    <div class="field">
+      <label for="pw-current">Password saat ini</label>
+      <input id="pw-current" type="password" autocomplete="current-password" />
+    </div>
+    <div class="field">
+      <label for="pw-new">Password baru</label>
+      <input id="pw-new" type="password" autocomplete="new-password" placeholder="minimal 6 karakter" />
+    </div>
+    <p class="hint" id="pwErr" hidden></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="ghost" id="pwCancel">Batal</button>
+    <button type="button" class="primary" id="pwSave">Simpan</button>
+  </div>
+</dialog>
+
 </div>
 
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* =========================================================
    BROKER BAWAAN
@@ -408,11 +426,6 @@ let DEFAULT_BROKER = {
 };
 const ACK_TIMEOUT = 3500;
 
-let SUPABASE_URL = '';
-let SUPABASE_ANON_KEY = '';
-let sb = null;          // client Supabase, dibuat setelah config termuat
-let currentUser = null; // {id, username}
-
 async function loadBrokerConfig(){
   try {
     const res = await fetch('/api/config', {cache:'no-store'});
@@ -428,11 +441,6 @@ async function loadBrokerConfig(){
         pass: cfg.pass || ''
       };
     }
-    if(cfg && cfg.supabaseUrl && cfg.supabaseAnonKey){
-      SUPABASE_URL = cfg.supabaseUrl;
-      SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
-      sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
   } catch(e){ /* tetap pakai nilai cadangan di atas */ }
 }
 /* ========================================================= */
@@ -440,87 +448,58 @@ async function loadBrokerConfig(){
 let devices = [];
 const conns = new Map();      // id -> {client, connected, connecting, esp, error, ackTimer}
 const collapsed = new Set();  // id perangkat yang ditutup
+let currentUser = null;       // {username}
 
-/* ---------------- akun & database ---------------- */
+/* ---------------- klien API kecil ---------------- */
+async function apiGet(url){
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+async function apiSend(method, url, body){
+  const res = await fetch(url, {
+    method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body || {})
+  });
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+const apiPost = (url, body) => apiSend('POST', url, body);
+const apiPut = (url, body) => apiSend('PUT', url, body);
+async function apiDelete(url){
+  const res = await fetch(url, {method:'DELETE'});
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+/* ---------------- akun & device lewat /api sendiri ---------------- */
 function sanitizeUsername(u){ return String(u || '').trim().toLowerCase(); }
 function validUsername(u){ return /^[a-z0-9_.]{3,20}$/.test(u); }
-// Supabase (hosted) menolak domain karangan yang tidak punya catatan DNS/MX
-// nyata (mis. "keminter.app" tidak pernah didaftarkan). gmail.com dipakai
-// murni sebagai domain penampung ID, BUKAN alamat yang benar-benar dikirimi
-// surel — makanya "Confirm email" WAJIB tetap OFF di Authentication Settings,
-// supaya Supabase tidak pernah mencoba mengirim apa pun ke domain ini.
-function usernameToEmail(u){ return u + '@gmail.com'; }
-
-function rowToDevice(row){
-  return {
-    id: row.id,
-    name: row.name,
-    deviceCode: row.device_code,
-    secretToken: row.secret_token,
-    useDefault: row.use_default,
-    host: row.host || '',
-    protocol: row.protocol || 'wss',
-    port: row.port || 8084,
-    path: row.path || '/mqtt',
-    useAuth: row.use_auth,
-    user: row.broker_user || '',
-    pass: row.broker_pass || '',
-    activeSwitches: row.active_switches,
-    switchNames: Array.isArray(row.switch_names) && row.switch_names.length
-      ? row.switch_names : ['Saklar 1','Saklar 2','Saklar 3','Saklar 4'],
-    switchStates: row.switch_states || {s1:false, s2:false, s3:false, s4:false}
-  };
-}
-function deviceToRow(dev){
-  return {
-    name: dev.name,
-    device_code: dev.deviceCode,
-    secret_token: dev.secretToken,
-    use_default: dev.useDefault,
-    host: dev.host || '',
-    protocol: dev.protocol || 'wss',
-    port: dev.port || 8084,
-    path: dev.path || '/mqtt',
-    use_auth: dev.useAuth,
-    broker_user: dev.user || '',
-    broker_pass: dev.pass || '',
-    active_switches: dev.activeSwitches,
-    switch_names: dev.switchNames,
-    switch_states: dev.switchStates
-  };
-}
 
 function showDbError(msg){ const e = $('#dbErr'); e.innerHTML = '<b>Gagal memuat data.</b> ' + esc(msg); e.hidden = false; }
 function hideDbError(){ $('#dbErr').hidden = true; }
 
 async function refreshDevicesFromDB(){
   devices.forEach(d => disconnectDevice(d.id));
-  const { data, error } = await sb.from('devices').select('*').order('created_at', { ascending: true });
-  if(error){ devices = []; render(); showDbError(error.message); return; }
-  hideDbError();
-  devices = (data || []).map(rowToDevice);
+  try {
+    devices = await apiGet('/api/devices');
+    hideDbError();
+  } catch(e){
+    devices = [];
+    showDbError(e.message);
+  }
   render();
   devices.forEach(connectDevice);
 }
-
-async function insertDeviceDB(payload){
-  const { data, error } = await sb.from('devices').insert(deviceToRow(payload)).select().single();
-  if(error) throw error;
-  return rowToDevice(data);
-}
-async function updateDeviceDB(id, payload){
-  const { data, error } = await sb.from('devices').update(deviceToRow(payload)).eq('id', id).select().single();
-  if(error) throw error;
-  return rowToDevice(data);
-}
+async function insertDeviceDB(payload){ return apiPost('/api/devices', payload); }
+async function updateDeviceDB(id, payload){ return apiPut('/api/devices', Object.assign({id}, payload)); }
 async function updateSwitchStatesDB(id, switchStates){
-  const { error } = await sb.from('devices').update({ switch_states: switchStates }).eq('id', id);
-  if(error) console.error('Gagal menyimpan status saklar:', error.message);
+  try { await apiPut('/api/devices', {id, switchStates}); }
+  catch(e){ console.error('Gagal menyimpan status saklar:', e.message); }
 }
-async function deleteDeviceDB(id){
-  const { error } = await sb.from('devices').delete().eq('id', id);
-  if(error) throw error;
-}
+async function deleteDeviceDB(id){ return apiDelete('/api/devices?id=' + encodeURIComponent(id)); }
 
 function getDevice(id){ return devices.find(d => d.id === id) || null; }
 
@@ -962,15 +941,6 @@ let authMode = 'login';
 function showAuthErr(msg){ const e = $('#authErr'); e.textContent = msg; e.hidden = false; }
 function clearAuthErr(){ $('#authErr').hidden = true; }
 
-function translateAuthError(err){
-  const m = (err && err.message) ? err.message : String(err);
-  if(/already registered|already exists|already been registered/i.test(m)) return 'Username sudah dipakai, coba username lain.';
-  if(/invalid login credentials/i.test(m)) return 'Username atau password salah.';
-  if(/Password should be at least/i.test(m)) return 'Password terlalu pendek.';
-  if(/Failed to fetch|NetworkError/i.test(m)) return 'Tidak bisa menghubungi database. Cek koneksi internet.';
-  return m;
-}
-
 $('#authSwitchBtn').addEventListener('click', () => {
   authMode = authMode === 'login' ? 'register' : 'login';
   $('#authSubmit').textContent = authMode === 'login' ? 'Masuk' : 'Daftar';
@@ -982,31 +952,19 @@ $('#authSwitchBtn').addEventListener('click', () => {
 
 async function handleAuthSubmit(){
   clearAuthErr();
-  if(!sb){ showAuthErr('Database belum dikonfigurasi. Set SUPABASE_URL & SUPABASE_ANON_KEY di Vercel.'); return; }
-
   const uname = sanitizeUsername($('#au-user').value);
   const pass = $('#au-pass').value;
   if(!validUsername(uname)) return showAuthErr('Username 3-20 karakter: huruf kecil, angka, titik, garis bawah.');
   if(pass.length < 6) return showAuthErr('Password minimal 6 karakter.');
 
-  const email = usernameToEmail(uname);
   $('#authSubmit').disabled = true;
   try {
-    if(authMode === 'register'){
-      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { username: uname } } });
-      if(error) throw error;
-      if(!data.session){
-        showAuthErr('Pendaftaran berhasil, tapi login otomatis gagal. Di dashboard Supabase, matikan "Confirm email" pada Authentication \u2192 Sign In / Providers \u2192 Email, lalu coba masuk manual.');
-        $('#authSubmit').disabled = false;
-        return;
-      }
-    } else {
-      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-      if(error) throw error;
-    }
+    const endpoint = authMode === 'register' ? '/api/auth-register' : '/api/auth-login';
+    const data = await apiPost(endpoint, { username: uname, password: pass });
     $('#au-pass').value = '';
+    await showAppScreen(data);
   } catch(e){
-    showAuthErr(translateAuthError(e));
+    showAuthErr(e.message);
   }
   $('#authSubmit').disabled = false;
 }
@@ -1018,7 +976,36 @@ $('#logoutBtn').addEventListener('click', async () => {
   devices.forEach(d => disconnectDevice(d.id));
   devices = [];
   render();
-  await sb.auth.signOut();
+  try { await apiPost('/api/auth-logout', {}); } catch(e){ /* abaikan, tetap tampilkan layar login */ }
+  currentUser = null;
+  showAuthScreen();
+});
+
+$('#pwBtn').addEventListener('click', () => {
+  $('#pw-current').value = '';
+  $('#pw-new').value = '';
+  $('#pwErr').hidden = true;
+  $('#pwDlg').showModal();
+  $('#pw-current').focus();
+});
+$('#pwCancel').addEventListener('click', () => $('#pwDlg').close());
+$('#pwSave').addEventListener('click', async () => {
+  const errEl = $('#pwErr');
+  errEl.hidden = true;
+  const current = $('#pw-current').value;
+  const next = $('#pw-new').value;
+  if(!current) { errEl.textContent = 'Isi password saat ini.'; errEl.hidden = false; return; }
+  if(next.length < 6){ errEl.textContent = 'Password baru minimal 6 karakter.'; errEl.hidden = false; return; }
+
+  $('#pwSave').disabled = true;
+  try {
+    await apiPost('/api/auth-change-password', { currentPassword: current, newPassword: next });
+    $('#pwDlg').close();
+  } catch(e){
+    errEl.textContent = e.message;
+    errEl.hidden = false;
+  }
+  $('#pwSave').disabled = false;
 });
 
 function showAuthScreen(){
@@ -1026,10 +1013,7 @@ function showAuthScreen(){
   $('#appScreen').hidden = true;
 }
 async function showAppScreen(user){
-  currentUser = {
-    id: user.id,
-    username: (user.user_metadata && user.user_metadata.username) || (user.email || '').split('@')[0]
-  };
+  currentUser = { username: user.username };
   $('#userChip').textContent = '@' + currentUser.username;
   $('#authScreen').hidden = true;
   $('#appScreen').hidden = false;
@@ -1045,21 +1029,12 @@ $('#reconnectAll').addEventListener('click', () => {
 
 (async function boot(){
   await loadBrokerConfig();
-  if(!sb){
-    showAuthErr('Database belum dikonfigurasi. Set SUPABASE_URL & SUPABASE_ANON_KEY di Environment Variables Vercel, lalu redeploy.');
-    return;
+  try {
+    const me = await apiGet('/api/auth-me');
+    await showAppScreen(me);
+  } catch(e){
+    showAuthScreen();
   }
-  sb.auth.onAuthStateChange((event, session) => {
-    if(session && session.user){
-      showAppScreen(session.user);
-    } else {
-      devices.forEach(d => disconnectDevice(d.id));
-      devices = [];
-      currentUser = null;
-      render();
-      showAuthScreen();
-    }
-  });
 })();
 
 document.addEventListener('visibilitychange', () => {
